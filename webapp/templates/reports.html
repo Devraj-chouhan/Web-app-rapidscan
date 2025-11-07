@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Reports - RapidScan Web{% endblock %}
+{% block content %}
+  <header class="mb-6">
+    <h1 class="text-2xl font-semibold">Reports</h1>
+    <p class="text-sm text-slate-500">Completed scan reports will appear here and update live.</p>
+  </header>
+
+  <div id="rep-empty" class="text-sm text-slate-600 {% if reports %}hidden{% endif %}">No reports yet. Start a scan from the Dashboard.</div>
+
+  <div id="rep-list" class="grid gap-3">
+    {% for r in reports %}
+    <div class="bg-white rounded-lg shadow p-4 flex items-center justify-between">
+      <div>
+        <div class="font-medium">{{ r.target }}</div>
+        <div class="text-xs text-slate-500">Finished {{ r.finished_at }}</div>
+      </div>
+      <div class="flex gap-2">
+        <a class="px-3 py-1 rounded bg-slate-200 text-slate-900" href="/reports/{{ r.id }}/download.pdf">Download PDF</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <script>
+    const listEl = document.getElementById('rep-list');
+    const emptyEl = document.getElementById('rep-empty');
+    const es = new EventSource('/events');
+    es.addEventListener('report', (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        emptyEl.classList.add('hidden');
+        // Fetch page to refresh list entry minimalistically (could be optimized)
+        const id = data.id;
+        const target = data.target;
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded-lg shadow p-4 flex items-center justify-between';
+        item.innerHTML = `<div><div class="font-medium">${target}</div><div class="text-xs text-slate-500">Just now</div></div><div class="flex gap-2"><a class="px-3 py-1 rounded bg-slate-200 text-slate-900" href="/reports/${id}/download.pdf">Download PDF</a></div>`;
+        listEl.prepend(item);
+      } catch(e){}
+    });
+  </script>
+{% endblock %}

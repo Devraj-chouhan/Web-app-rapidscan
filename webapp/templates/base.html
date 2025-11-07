@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}RapidScan Web{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="min-h-screen flex">
+    <aside class="w-64 bg-white border-r">
+      <div class="p-4 border-b">
+        <div class="font-semibold">RapidScan</div>
+        <div class="text-xs text-slate-500">Web Dashboard</div>
+      </div>
+      <nav class="p-2 space-y-1">
+        <a class="block px-3 py-2 rounded hover:bg-slate-100 {% if request.path.startswith('/dashboard') %}bg-slate-100{% endif %}" href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a class="block px-3 py-2 rounded hover:bg-slate-100 {% if request.path.startswith('/reports') %}bg-slate-100{% endif %}" href="{{ url_for('reports_page') }}">Reports</a>
+        <a class="block px-3 py-2 rounded hover:bg-slate-100 {% if request.path.startswith('/account') %}bg-slate-100{% endif %}" href="{{ url_for('account') }}">Account</a>
+        <form class="px-3 py-2" action="{{ url_for('logout') }}" method="post">
+          <button class="text-rose-700 hover:underline" type="submit">Logout</button>
+        </form>
+      </nav>
+    </aside>
+    <main class="flex-1 p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

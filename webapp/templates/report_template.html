@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 16px; margin-top: 24px; }
+    pre { white-space: pre-wrap; word-wrap: break-word; border: 1px solid #ddd; padding: 10px; }
+    .meta { color: #555; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h1>RapidScan Report</h1>
+  <div class="meta">
+    <div><strong>Target:</strong> {{ report.target }}</div>
+    <div><strong>Started:</strong> {{ report.started_at }}</div>
+    <div><strong>Finished:</strong> {{ report.finished_at }}</div>
+  </div>
+
+  <h2>Findings</h2>
+  <pre>{{ vul_text }}</pre>
+</body>
+</html>

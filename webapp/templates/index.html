@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RapidScan Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-semibold">RapidScan Web UI</h1>
+      <p class="text-sm text-slate-500">Run the existing CLI scanner with a clean web interface.</p>
+    </header>
+
+    <section class="bg-white rounded-lg shadow p-4 mb-6">
+      <form id="scan-form" class="grid md:grid-cols-3 gap-3 items-end">
+        <div>
+          <label class="block text-sm font-medium mb-1" for="target">Target (domain or URL)</label>
+          <input id="target" name="target" type="text" class="w-full border rounded px-3 py-2" placeholder="example.com" required />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1" for="skip">Skip tools (optional)</label>
+          <input id="skip" name="skip" type="text" class="w-full border rounded px-3 py-2" placeholder="e.g. nmap, nikto" />
+          <p class="text-xs text-slate-500 mt-1">Comma or space separated. Must match tool names supported by --skip.</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="start" type="submit" class="inline-flex items-center justify-center px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 w-full">Start Scan</button>
+          <button id="stop" type="button" class="inline-flex items-center justify-center px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700 w-24" disabled>Stop</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-4 mb-6">
+      <div class="mb-2 flex items-center justify-between">
+        <div class="text-sm font-medium">Progress</div>
+        <div id="progress-text" class="text-sm text-slate-600">0/0</div>
+      </div>
+      <div class="w-full bg-slate-200 rounded h-3 overflow-hidden">
+        <div id="progress-bar" class="bg-emerald-600 h-3 w-0"></div>
+      </div>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-4">
+      <div class="mb-2 flex items-center justify-between">
+        <div class="text-sm font-medium">Live Log</div>
+        <button id="clear-log" class="text-xs text-slate-600 hover:text-slate-900">Clear</button>
+      </div>
+      <pre id="log" class="bg-slate-900 text-slate-50 p-3 rounded h-[480px] overflow-auto text-xs"></pre>
+    </section>
+  </div>
+
+  <script>
+    const form = document.getElementById('scan-form');
+    const stopBtn = document.getElementById('stop');
+    const startBtn = document.getElementById('start');
+    const logEl = document.getElementById('log');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const clearBtn = document.getElementById('clear-log');
+
+    let es = null;
+    let currentScanId = null;
+
+    function appendLog(line){
+      if (!line) return;
+      logEl.textContent += line + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setDisabled(state){
+      startBtn.disabled = state;
+      stopBtn.disabled = !state;
+    }
+
+    clearBtn.addEventListener('click', () => { logEl.textContent = ''; });
+
+    stopBtn.addEventListener('click', async () => {
+      if (!currentScanId) return;
+      try { await fetch(`/stop/${currentScanId}`, { method: 'POST' }); } catch(e){}
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (es) { es.close(); es = null; }
+      logEl.textContent = '';
+      progressBar.style.width = '0%';
+      progressText.textContent = '0/0';
+
+      const payload = {
+        target: document.getElementById('target').value.trim(),
+        skip: document.getElementById('skip').value.trim()
+      };
+
+      setDisabled(true);
+      try {
+        const res = await fetch('/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!res.ok) {
+          const j = await res.json().catch(()=>({error:'Request failed'}));
+          appendLog(`[error] ${j.error || 'Unable to start scan'}`);
+          setDisabled(false);
+          return;
+        }
+        const j = await res.json();
+        currentScanId = j.scan_id;
+        es = new EventSource(`/stream/${currentScanId}`);
+        es.onmessage = (ev) => appendLog(ev.data);
+        es.addEventListener('progress', (ev) => {
+          try {
+            const p = JSON.parse(ev.data);
+            const total = p.total || 0;
+            const cur = p.progress || 0;
+            progressText.textContent = `${cur}/${total}`;
+            const pct = total > 0 ? Math.min(100, Math.floor(cur * 100 / total)) : 0;
+            progressBar.style.width = pct + '%';
+          } catch(e){}
+        });
+        es.addEventListener('complete', () => {
+          appendLog('[info] Scan complete');
+          setDisabled(false);
+          es && es.close();
+        });
+        es.onerror = () => { /* keep alive; SSE may reconnect */ };
+      } catch (e) {
+        appendLog('[error] Failed to start scan');
+        setDisabled(false);
+      }
+    });
+  </script>
+</body>
+</html>
