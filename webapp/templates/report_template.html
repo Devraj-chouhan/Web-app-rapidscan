@@ -4,22 +4,76 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; }
-    h1 { font-size: 20px; }
-    h2 { font-size: 16px; margin-top: 24px; }
-    pre { white-space: pre-wrap; word-wrap: break-word; border: 1px solid #ddd; padding: 10px; }
-    .meta { color: #555; font-size: 11px; }
+    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #111; }
+    h1 { font-size: 22px; margin: 0 0 8px 0; }
+    h2 { font-size: 16px; margin: 18px 0 8px 0; }
+    .meta { color: #444; font-size: 11px; margin-bottom: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+    .row { display: table; width: 100%; table-layout: fixed; }
+    .col { display: table-cell; vertical-align: top; padding: 6px; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .b-high { background: #fee2e2; color: #991b1b; }
+    .b-med { background: #fef3c7; color: #92400e; }
+    .b-low { background: #d1fae5; color: #065f46; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; }
+    th { background: #f3f4f6; text-align: left; }
+    pre { white-space: pre-wrap; word-wrap: break-word; border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
   </style>
 </head>
 <body>
-  <h1>RapidScan Report</h1>
+  <h1>RapidScan Security Assessment</h1>
   <div class="meta">
     <div><strong>Target:</strong> {{ report.target }}</div>
-    <div><strong>Started:</strong> {{ report.started_at }}</div>
-    <div><strong>Finished:</strong> {{ report.finished_at }}</div>
+    <div><strong>Scan Window:</strong> {{ report.started_at }} → {{ report.finished_at }}</div>
   </div>
 
-  <h2>Findings</h2>
-  <pre>{{ vul_text }}</pre>
+  <div class="card">
+    <div class="row">
+      <div class="col" style="width: 55%;">
+        <h2>Tools Used</h2>
+        {% if tools_used and tools_used|length > 0 %}
+        <table>
+          <tr><th>Tool</th></tr>
+          {% for t in tools_used %}
+            <tr><td>{{ t }}</td></tr>
+          {% endfor %}
+        </table>
+        {% else %}
+          <div>No tool list available</div>
+        {% endif %}
+        {% if skipped and skipped|length > 0 %}
+          <div style="margin-top:8px; font-size:11px; color:#555;"><strong>Skipped:</strong> {{ ', '.join(skipped) }}</div>
+        {% endif %}
+      </div>
+      <div class="col" style="width: 45%;">
+        <h2>Risk Overview</h2>
+        <div>{{ pie_svg|safe }}</div>
+        <table style="margin-top:8px;">
+          <tr>
+            <th>Level</th><th>Count</th>
+          </tr>
+          <tr><td><span class="badge b-high">High</span></td><td>{{ sev.high or 0 }}</td></tr>
+          <tr><td><span class="badge b-med">Medium</span></td><td>{{ sev.medium or 0 }}</td></tr>
+          <tr><td><span class="badge b-low">Low</span></td><td>{{ sev.low or 0 }}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Findings (Raw)</h2>
+    <pre>{{ vul_text }}</pre>
+  </div>
+
+  <div class="card">
+    <h2>Remediation Guidance</h2>
+    <ul>
+      <li><strong>High:</strong> Prioritize immediate fixes, patch vulnerable services, disable weak protocols/ciphers, restrict exposure.</li>
+      <li><strong>Medium:</strong> Address misconfigurations, improve headers, reduce attack surface, validate inputs.</li>
+      <li><strong>Low:</strong> Apply hardening best practices, remove unnecessary info disclosure, plan maintenance window.</li>
+    </ul>
+    <div style="font-size: 11px; color:#555; margin-top:6px;">Refer to raw findings above for exact affected components and consider re-running focused tools (e.g., nmap, nikto, sslyze) after remediation.</div>
+  </div>
 </body>
 </html>

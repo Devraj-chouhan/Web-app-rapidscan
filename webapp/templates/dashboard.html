@@ -19,6 +19,7 @@
       </div>
       <div class="flex gap-2">
         <button id="start" type="submit" class="inline-flex items-center justify-center px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 w-full">Start Scan</button>
+        <button id="skip" type="button" class="inline-flex items-center justify-center px-4 py-2 rounded bg-amber-600 text-white hover:bg-amber-700 w-24 hidden">Skip</button>
         <button id="stop" type="button" class="inline-flex items-center justify-center px-4 py-2 rounded bg-rose-600 text-white hover:bg-rose-700 w-24" disabled>Stop</button>
       </div>
     </form>
@@ -34,6 +35,20 @@
     </div>
   </section>
 
+  <section class="bg-white rounded-lg shadow p-4 mb-6">
+    <div class="mb-2 flex items-center justify-between">
+      <div class="text-sm font-medium">Vulnerabilities (Live)</div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <canvas id="sevChart" class="w-full h-64"></canvas>
+      <div class="text-sm text-slate-600">
+        <div>High: <span id="sevHigh">0</span></div>
+        <div>Medium: <span id="sevMedium">0</span></div>
+        <div>Low: <span id="sevLow">0</span></div>
+      </div>
+    </div>
+  </section>
+
   <section class="bg-white rounded-lg shadow p-4">
     <div class="mb-2 flex items-center justify-between">
       <div class="text-sm font-medium">Live Log</div>
@@ -42,14 +57,43 @@
     <pre id="log" class="bg-slate-900 text-slate-50 p-3 rounded h-[480px] overflow-auto text-xs"></pre>
   </section>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     const form = document.getElementById('scan-form');
     const stopBtn = document.getElementById('stop');
     const startBtn = document.getElementById('start');
+    const skipBtn = document.getElementById('skip');
     const logEl = document.getElementById('log');
     const progressBar = document.getElementById('progress-bar');
     const progressText = document.getElementById('progress-text');
     const clearBtn = document.getElementById('clear-log');
+    const sevHighEl = document.getElementById('sevHigh');
+    const sevMediumEl = document.getElementById('sevMedium');
+    const sevLowEl = document.getElementById('sevLow');
+
+    // Chart setup
+    let sevChart;
+    function initChart(){
+      const ctx = document.getElementById('sevChart');
+      if (!ctx) return;
+      sevChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['High', 'Medium', 'Low'],
+          datasets: [{
+            data: [0, 0, 0],
+            backgroundColor: ['#ef4444', '#f59e0b', '#10b981'],
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+      });
+    }
+
+    function updateChart(low, med, high){
+      if (!sevChart) return;
+      sevChart.data.datasets[0].data = [high, med, low];
+      sevChart.update('none');
+    }
 
     let es = null;
     let currentScanId = null;
@@ -63,6 +107,12 @@
     function setDisabled(state){
       startBtn.disabled = state;
       stopBtn.disabled = !state;
+      // Skip should be visible only when running
+      if (state) {
+        skipBtn.classList.remove('hidden');
+      } else {
+        skipBtn.classList.add('hidden');
+      }
     }
 
     clearBtn.addEventListener('click', () => { logEl.textContent = ''; });
@@ -70,6 +120,15 @@
     stopBtn.addEventListener('click', async () => {
       if (!currentScanId) return;
       try { await fetch(`/stop/${currentScanId}`, { method: 'POST' }); } catch(e){}
+      // clean up UI
+      setDisabled(false);
+      if (es) { es.close(); es = null; }
+      sessionStorage.removeItem('scanId');
+    });
+
+    skipBtn.addEventListener('click', async () => {
+      if (!currentScanId) return;
+      try { await fetch(`/skip/${currentScanId}`, { method: 'POST' }); } catch(e){}
     });
 
     form.addEventListener('submit', async (e) => {
@@ -95,6 +154,7 @@
         }
         const j = await res.json();
         currentScanId = j.scan_id;
+        sessionStorage.setItem('scanId', currentScanId);
         es = new EventSource(`/stream/${currentScanId}`);
         es.onmessage = (ev) => appendLog(ev.data);
         es.addEventListener('progress', (ev) => {
@@ -105,18 +165,64 @@
             progressText.textContent = `${cur}/${total}`;
             const pct = total > 0 ? Math.min(100, Math.floor(cur * 100 / total)) : 0;
             progressBar.style.width = pct + '%';
+            const sev = p.sev || {low:0,medium:0,high:0};
+            sevLowEl.textContent = sev.low || 0;
+            sevMediumEl.textContent = sev.medium || 0;
+            sevHighEl.textContent = sev.high || 0;
+            updateChart(sev.low||0, sev.medium||0, sev.high||0);
           } catch(e){}
         });
         es.addEventListener('complete', () => {
           appendLog('[info] Scan complete');
           setDisabled(false);
           es && es.close();
+          sessionStorage.removeItem('scanId');
         });
         es.onerror = () => { /* keep alive; SSE may reconnect */ };
       } catch (e) {
         appendLog('[error] Failed to start scan');
         setDisabled(false);
       }
+    });
+
+    // Reconnect to ongoing scan if navigating away/back
+    function reconnectIfNeeded(){
+      const existing = sessionStorage.getItem('scanId');
+      if (!existing || es) return;
+      currentScanId = existing;
+      setDisabled(true);
+      es = new EventSource(`/stream/${currentScanId}`);
+      es.onmessage = (ev) => appendLog(ev.data);
+      es.addEventListener('progress', (ev) => {
+        try {
+          const p = JSON.parse(ev.data);
+          const total = p.total || 0;
+          const cur = p.progress || 0;
+          progressText.textContent = `${cur}/${total}`;
+          const pct = total > 0 ? Math.min(100, Math.floor(cur * 100 / total)) : 0;
+          progressBar.style.width = pct + '%';
+          const sev = p.sev || {low:0,medium:0,high:0};
+          sevLowEl.textContent = sev.low || 0;
+          sevMediumEl.textContent = sev.medium || 0;
+          sevHighEl.textContent = sev.high || 0;
+          updateChart(sev.low||0, sev.medium||0, sev.high||0);
+        } catch(e){}
+      });
+      es.addEventListener('complete', () => {
+        appendLog('[info] Scan complete');
+        setDisabled(false);
+        es && es.close();
+        sessionStorage.removeItem('scanId');
+      });
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reconnectIfNeeded();
+    });
+
+    window.addEventListener('load', () => {
+      initChart();
+      reconnectIfNeeded();
     });
   </script>
 {% endblock %}
