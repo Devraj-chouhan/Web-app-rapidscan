@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>{% block title %}RapidScan Web{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    window.tailwind = window.tailwind || {};
+    tailwind.config = { darkMode: 'class' };
+  </script>
 </head>
 <body class="h-full bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
   <div class="min-h-screen flex flex-col md:flex-row">
-    <aside class="basis-full md:basis-1/4 bg-white dark:bg-slate-800 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700">
+    <aside id="appSidebar" class="hidden md:block basis-full md:basis-1/4 bg-white dark:bg-slate-800 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700">
       <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <div>
           <div class="font-semibold">RapidScan</div>
@@ -28,19 +32,39 @@
         </form>
       </nav>
     </aside>
-    <main class="basis-full md:basis-3/4 p-4 md:p-6">
-      {% block content %}{% endblock %}
+    <main class="basis-full md:basis-3/4">
+      <header class="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur px-4 md:px-6">
+        <button id="sidebarToggle" class="md:hidden inline-flex items-center justify-center rounded p-2 hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Toggle sidebar" title="Toggle sidebar">
+          ☰
+        </button>
+        <h2 class="text-base md:text-lg font-semibold">Web Security Scanner</h2>
+        <div class="ml-auto flex items-center gap-2">
+          <!-- Theme toggle duplicated here for convenience on mobile -->
+          <button id="themeToggleTop" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700" title="Toggle theme" aria-label="Toggle theme">
+            <span class="hidden" data-icon="light">🌞</span>
+            <span data-icon="dark">🌙</span>
+          </button>
+        </div>
+      </header>
+      <div class="p-4 md:p-6">
+        {% block content %}{% endblock %}
+      </div>
     </main>
   </div>
   <script>
     (function(){
       const root = document.documentElement;
       const btn = document.getElementById('themeToggle');
+      const btnTop = document.getElementById('themeToggleTop');
       const iconL = document.getElementById('iconLight');
       const iconD = document.getElementById('iconDark');
+      const topL = btnTop ? btnTop.querySelector('[data-icon="light"]') : null;
+      const topD = btnTop ? btnTop.querySelector('[data-icon="dark"]') : null;
       function apply(theme){
-        if (theme === 'dark') { root.classList.add('dark'); iconL.classList.remove('hidden'); iconD.classList.add('hidden'); }
-        else { root.classList.remove('dark'); iconL.classList.add('hidden'); iconD.classList.remove('hidden'); }
+        const isDark = theme === 'dark';
+        root.classList.toggle('dark', isDark);
+        if (iconL && iconD){ iconL.classList.toggle('hidden', !isDark); iconD.classList.toggle('hidden', isDark); }
+        if (topL && topD){ topL.classList.toggle('hidden', !isDark); topD.classList.toggle('hidden', isDark); }
       }
       const saved = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       apply(saved);
@@ -49,6 +73,20 @@
         localStorage.setItem('theme', next);
         apply(next);
       });
+      btnTop && btnTop.addEventListener('click', function(){
+        const next = root.classList.contains('dark') ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+
+      // Sidebar toggle for small screens
+      const sidebar = document.getElementById('appSidebar');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      if (sidebar && sidebarToggle){
+        sidebarToggle.addEventListener('click', function(){
+          sidebar.classList.toggle('hidden');
+        });
+      }
     })();
   </script>
 </body>
